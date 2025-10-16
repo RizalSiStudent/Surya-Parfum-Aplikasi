@@ -65,14 +65,10 @@ class ProductListFragment : Fragment() {
                     for (document in result) {
                         try {
                             val product = document.toObject(Product::class.java)
-                            if (product != null) {
-                                product.id = document.id
-                                productList.add(product)
-                                // Log 3: Memastikan setiap produk berhasil ditambahkan ke list
-                                Log.d(TAG, "Menambahkan produk: ${product.name}")
-                            } else {
-                                Log.w(TAG, "Produk null ditemukan untuk dokumen ID: ${document.id}")
-                            }
+                            product.id = document.id
+                            productList.add(product)
+                            // Log 3: Memastikan setiap produk berhasil ditambahkan ke list
+                            Log.d(TAG, "Menambahkan produk: ${product.name}")
                         } catch (e: Exception) {
                             // Log 4: Jika ada error saat mengubah data (misal tipe data tidak cocok)
                             Log.e(TAG, "Error converting document ${document.id}", e)

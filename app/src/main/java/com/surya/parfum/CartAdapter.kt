@@ -8,6 +8,7 @@ import com.surya.parfum.databinding.ItemCartBinding
 
 class CartAdapter(
     private val cartItems: MutableList<CartItem>,
+    private val onSelectionChanged: () -> Unit, // Callback untuk memberitahu Activity
     private val onDeleteClick: (CartItem) -> Unit
 ) : RecyclerView.Adapter<CartAdapter.ViewHolder>() {
 
@@ -30,6 +31,16 @@ class CartAdapter(
                 .placeholder(R.drawable.ic_image_placeholder)
                 .error(R.drawable.ic_image_placeholder)
                 .into(ivProductImage)
+
+            // Atur status checkbox tanpa memicu listener
+            cbSelectItem.setOnCheckedChangeListener(null)
+            cbSelectItem.isChecked = item.isSelected
+
+            // Tambahkan listener baru setelah status diatur
+            cbSelectItem.setOnCheckedChangeListener { _, isChecked ->
+                item.isSelected = isChecked
+                onSelectionChanged() // Panggil callback agar Activity bisa update total harga
+            }
 
             ivDeleteItem.setOnClickListener {
                 onDeleteClick(item)

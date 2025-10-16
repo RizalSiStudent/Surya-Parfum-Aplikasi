@@ -1,5 +1,6 @@
 package com.surya.parfum
 
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
@@ -18,6 +19,8 @@ class CartActivity : AppCompatActivity() {
     private lateinit var cartAdapter: CartAdapter
     private val cartItemList = mutableListOf<CartItem>()
 
+    private var totalAmount: Long = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCartBinding.inflate(layoutInflater)
@@ -26,20 +29,42 @@ class CartActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
         auth = FirebaseAuth.getInstance()
 
-        // Fungsi untuk tombol kembali di toolbar
         binding.topAppBar.setNavigationOnClickListener {
             finish()
         }
 
         setupRecyclerView()
         fetchCartItems()
+
+        binding.btnCheckout.setOnClickListener {
+            // Filter untuk mendapatkan hanya item yang terpilih
+            val selectedItems = ArrayList(cartItemList.filter { it.isSelected })
+
+            if (selectedItems.isEmpty()) {
+                Toast.makeText(this, "Pilih setidaknya satu item untuk checkout", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val intent = Intent(this, CheckoutActivity::class.java).apply {
+                // Kirim daftar item yang terpilih (membutuhkan CartItem jadi Parcelable)
+                putParcelableArrayListExtra("SELECTED_ITEMS", selectedItems)
+                // Kirim total harga yang sudah dihitung
+                putExtra("TOTAL_AMOUNT", totalAmount)
+            }
+            startActivity(intent)
+        }
     }
 
     private fun setupRecyclerView() {
-        cartAdapter = CartAdapter(cartItemList) { cartItem ->
-            // Logika saat tombol delete di klik
-            deleteCartItem(cartItem)
-        }
+        cartAdapter = CartAdapter(
+            cartItemList,
+            onSelectionChanged = {
+                updateTotal() // Panggil updateTotal setiap kali ada perubahan centang
+            },
+            onDeleteClick = { cartItem ->
+                deleteCartItem(cartItem)
+            }
+        )
         binding.rvCartItems.apply {
             layoutManager = LinearLayoutManager(this@CartActivity)
             adapter = cartAdapter
@@ -47,14 +72,8 @@ class CartActivity : AppCompatActivity() {
     }
 
     private fun fetchCartItems() {
-        val currentUser = auth.currentUser
-        if (currentUser == null) {
-            Toast.makeText(this, "Silakan login terlebih dahulu", Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
+        val currentUser = auth.currentUser ?: return
 
-        // Ambil data dari koleksi 'carts' yang userId-nya sama dengan pengguna saat ini
         db.collection("carts")
             .whereEqualTo("userId", currentUser.uid)
             .addSnapshotListener { snapshots, error ->
@@ -63,12 +82,13 @@ class CartActivity : AppCompatActivity() {
                     return@addSnapshotListener
                 }
 
-                if (snapshots != null) {
+                snapshots?.let {
                     cartItemList.clear()
-                    for (document in snapshots.documents) {
+                    for (document in it.documents) {
                         val cartItem = document.toObject(CartItem::class.java)
                         if (cartItem != null) {
-                            cartItem.id = document.id // Simpan ID dokumen
+                            cartItem.id = document.id
+                            cartItem.isSelected = true // Set default semua item terpilih
                             cartItemList.add(cartItem)
                         }
                     }
@@ -92,10 +112,15 @@ class CartActivity : AppCompatActivity() {
 
     private fun updateTotal() {
         var total: Long = 0
-        for (item in cartItemList) {
+        // Hitung total HANYA dari item yang terpilih
+        for (item in cartItemList.filter { it.isSelected }) {
             total += item.totalPrice
         }
+        totalAmount = total
         binding.tvTotalPrice.text = "Rp $total"
+
+        // Nonaktifkan tombol checkout jika tidak ada item yang dipilih (total 0)
+        binding.btnCheckout.isEnabled = total > 0
     }
 
     private fun checkIfEmpty() {

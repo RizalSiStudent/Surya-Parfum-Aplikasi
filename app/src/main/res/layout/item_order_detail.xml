@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingVertical="4dp">
+
+    <TextView
+        android:id="@+id/tvItemName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textStyle="bold"
+        tools:text="One Million Lucky" />
+
+    <TextView
+        android:id="@+id/tvItemDetails"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:text="Ukuran: 50 ml - Rp 125.000" />
+</LinearLayout>

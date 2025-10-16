@@ -1,46 +1,57 @@
 package com.surya.parfum
 
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import androidx.fragment.app.Fragment
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.firebase.firestore.FirebaseFirestore
-import com.surya.parfum.databinding.ActivityAdminDashboardBinding
-import kotlin.apply
-import kotlin.jvm.java
-import kotlin.let
+import com.surya.parfum.databinding.FragmentAdminDashboardBinding
 
-class AdminDashboardActivity : AppCompatActivity() {
+class AdminDashboardFragment : Fragment() {
 
-    private lateinit var binding: ActivityAdminDashboardBinding
+    private var _binding: FragmentAdminDashboardBinding? = null
+    private val binding get() = _binding!!
     private lateinit var db: FirebaseFirestore
     private lateinit var productAdapter: ProductAdminAdapter
     private val productList = mutableListOf<Product>()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityAdminDashboardBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentAdminDashboardBinding.inflate(inflater, container, false)
+        return binding.root
+    }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         db = FirebaseFirestore.getInstance()
-        setupRecyclerView()
-        fetchProducts()
+        setupRecyclerView() // Now this function exists
+        fetchProducts()     // And this one too
 
         binding.fabAddProduct.setOnClickListener {
-            // Buka halaman tambah produk
-            val intent = Intent(this, AddEditProductActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(requireActivity(), AddEditProductActivity::class.java))
         }
+
+        // The button "Lihat Pesanan Masuk" is now part of this fragment's layout
+        // but the navigation is handled by AdminHomeActivity's BottomNavigationView,
+        // so we can remove the button or its listener if it's still there.
     }
+
+    // =====================================================================
+    // ===== FUNGSI YANG HILANG SUDAH DITAMBAHKAN DI BAWAH INI =====
+    // =====================================================================
 
     private fun setupRecyclerView() {
         productAdapter = ProductAdminAdapter(
             productList,
             onEditClick = { product ->
-                // Buka halaman edit produk dan kirim ID produk
-                val intent = Intent(this, AddEditProductActivity::class.java)
+                val intent = Intent(requireActivity(), AddEditProductActivity::class.java)
                 intent.putExtra("PRODUCT_ID", product.id)
                 startActivity(intent)
             },
@@ -49,7 +60,7 @@ class AdminDashboardActivity : AppCompatActivity() {
             }
         )
         binding.rvAdminProducts.apply {
-            layoutManager = LinearLayoutManager(this@AdminDashboardActivity)
+            layoutManager = LinearLayoutManager(requireContext())
             adapter = productAdapter
         }
     }
@@ -57,7 +68,7 @@ class AdminDashboardActivity : AppCompatActivity() {
     private fun fetchProducts() {
         db.collection("products").addSnapshotListener { snapshots, error ->
             if (error != null) {
-                Toast.makeText(this, "Error fetching data: ${error.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Error fetching data: ${error.message}", Toast.LENGTH_SHORT).show()
                 return@addSnapshotListener
             }
 
@@ -66,7 +77,7 @@ class AdminDashboardActivity : AppCompatActivity() {
                 for (document in it.documents) {
                     val product = document.toObject(Product::class.java)
                     if (product != null) {
-                        product.id = document.id // Penting: simpan ID dokumen
+                        product.id = document.id
                         productList.add(product)
                     }
                 }
@@ -76,7 +87,7 @@ class AdminDashboardActivity : AppCompatActivity() {
     }
 
     private fun showDeleteConfirmationDialog(product: Product) {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(requireContext())
             .setTitle("Hapus Produk")
             .setMessage("Anda yakin ingin menghapus '${product.name}'?")
             .setPositiveButton("Ya, Hapus") { _, _ ->
@@ -89,10 +100,15 @@ class AdminDashboardActivity : AppCompatActivity() {
     private fun deleteProduct(productId: String) {
         db.collection("products").document(productId).delete()
             .addOnSuccessListener {
-                Toast.makeText(this, "Produk berhasil dihapus", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Produk berhasil dihapus", Toast.LENGTH_SHORT).show()
             }
             .addOnFailureListener { e ->
-                Toast.makeText(this, "Gagal menghapus produk: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Gagal menghapus produk: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

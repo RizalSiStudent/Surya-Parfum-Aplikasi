@@ -52,8 +52,7 @@ class LoginActivity : AppCompatActivity() {
         if (email.equals("admin@suryaparfum.com", ignoreCase = true)) {
             // Jika Admin, arahkan ke Dashboard Admin
             Toast.makeText(this, "Selamat datang, Admin!", Toast.LENGTH_SHORT).show()
-            val intent = Intent(this, AdminDashboardActivity::class.java)
-            // Hapus semua activity sebelumnya dari stack
+            val intent = Intent(this, AdminHomeActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()
