@@ -1,15 +1,22 @@
 package com.surya.parfum
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.net.Uri
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -27,12 +34,24 @@ class CheckoutActivity : AppCompatActivity() {
     private var totalAmount: Long = 0
     private val selectedItems = mutableListOf<CartItem>()
     private var customerLocation: GeoPoint? = null
+
+    // Kode Request Permission
     private val LOCATION_PERMISSION_REQ_CODE = 1000
+    private val NOTIFICATION_PERMISSION_REQ_CODE = 1001
+
+    // ID Channel Notifikasi
+    private val CHANNEL_ID = "order_notifications"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCheckoutBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // 1. Inisialisasi Channel Notifikasi
+        createNotificationChannel()
+
+        // 2. Cek/Minta Izin Notifikasi (Khusus Android 13+)
+        checkNotificationPermission()
 
         db = FirebaseFirestore.getInstance()
         auth = FirebaseAuth.getInstance()
@@ -88,6 +107,7 @@ class CheckoutActivity : AppCompatActivity() {
         }
     }
 
+    // --- FUNGSI LOKASI ---
     private fun getCurrentLocation() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQ_CODE)
@@ -114,17 +134,90 @@ class CheckoutActivity : AppCompatActivity() {
             }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == LOCATION_PERMISSION_REQ_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                getCurrentLocation()
-            } else {
-                Toast.makeText(this, "Izin lokasi ditolak", Toast.LENGTH_SHORT).show()
+    // --- FUNGSI NOTIFIKASI ---
+    private fun createNotificationChannel() {
+        // Channel hanya diperlukan untuk Android O (API 26) ke atas
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Status Pesanan"
+            val descriptionText = "Notifikasi untuk status pesanan parfum"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    NOTIFICATION_PERMISSION_REQ_CODE
+                )
             }
         }
     }
 
+    private fun showOrderSuccessNotification() {
+        // Intent untuk membuka MainActivity saat notifikasi diklik
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Builder Notifikasi
+        // NOTE: Pastikan kamu punya icon di res/drawable/ic_notification atau gunakan icon default
+        // Di sini saya pakai ic_launcher_foreground sebagai contoh aman
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Pesanan Berhasil!")
+            .setContentText("Pesanan parfum Anda telah diterima dan sedang diproses.")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+
+        // Tampilkan Notifikasi
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            NotificationManagerCompat.from(this).notify(System.currentTimeMillis().toInt(), builder.build())
+        }
+    }
+
+    // --- HANDLE PERMISSIONS RESULT ---
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            LOCATION_PERMISSION_REQ_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    getCurrentLocation()
+                } else {
+                    Toast.makeText(this, "Izin lokasi ditolak", Toast.LENGTH_SHORT).show()
+                }
+            }
+            NOTIFICATION_PERMISSION_REQ_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // Izin notifikasi diberikan
+                } else {
+                    Toast.makeText(this, "Izin notifikasi ditolak, Anda tidak akan menerima update status.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // --- LOGIKA PEMESANAN ---
     private fun placeOrder() {
         val name = binding.etName.text.toString().trim()
         val address = binding.etAddress.text.toString().trim()
@@ -146,16 +239,12 @@ class CheckoutActivity : AppCompatActivity() {
         binding.btnPlaceOrder.isEnabled = false
         binding.btnPlaceOrder.text = "Memproses Pesanan..."
 
-        // === PERBAIKAN DI SINI ===
-        // Menambahkan 'quantity' dan 'price' ke dalam map item yang dikirim ke Firestore
         val itemsForOrder = mutableListOf<HashMap<String, Any?>>()
         for (cartItem in selectedItems) {
             itemsForOrder.add(hashMapOf(
                 "productName" to cartItem.productName,
                 "selectedSize" to cartItem.selectedSize,
                 "totalPrice" to cartItem.totalPrice,
-
-                // TAMBAHAN PENTING: Agar admin bisa membaca jumlah dan harga satuan
                 "quantity" to cartItem.quantity,
                 "price" to cartItem.price
             ))
@@ -191,6 +280,9 @@ class CheckoutActivity : AppCompatActivity() {
         }
 
         batch.commit().addOnSuccessListener {
+            // TRIGGER NOTIFIKASI DI SINI
+            showOrderSuccessNotification()
+
             Toast.makeText(this, "Pesanan berhasil dibuat!", Toast.LENGTH_LONG).show()
 
             val intent = Intent(this, MainActivity::class.java)

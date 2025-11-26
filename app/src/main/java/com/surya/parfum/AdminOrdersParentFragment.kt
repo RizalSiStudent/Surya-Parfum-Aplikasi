@@ -25,15 +25,15 @@ class AdminOrdersParentFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Setup ViewPager dengan Adapter
         val adapter = OrdersPagerAdapter(this)
         binding.viewPager.adapter = adapter
 
-        // Hubungkan TabLayout dengan ViewPager
+        // === ATUR JUDUL UNTUK 3 TAB ===
         TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
             when (position) {
-                0 -> tab.text = "Perlu Diproses"
-                1 -> tab.text = "Riwayat Pesanan"
+                0 -> tab.text = "Pesanan Baru"    // Status: Diproses
+                1 -> tab.text = "Sedang Dikemas"  // Status: Disetujui
+                2 -> tab.text = "Riwayat"         // Status: Selesai/Ditolak
             }
         }.attach()
     }
@@ -43,15 +43,17 @@ class AdminOrdersParentFragment : Fragment() {
         _binding = null
     }
 
-    // Inner class untuk Adapter ViewPager
     inner class OrdersPagerAdapter(fragment: Fragment) : FragmentStateAdapter(fragment) {
-        override fun getItemCount(): Int = 2
+        // Ubah jumlah item menjadi 3
+        override fun getItemCount(): Int = 3
 
         override fun createFragment(position: Int): Fragment {
+            // Kirim tipe filter yang berbeda untuk setiap tab
             return when (position) {
-                0 -> AdminOrderListFragment.newInstance("active") // Tab 1: Pesanan Aktif
-                1 -> AdminOrderListFragment.newInstance("history") // Tab 2: Riwayat
-                else -> AdminOrderListFragment.newInstance("active")
+                0 -> AdminOrderListFragment.newInstance("new")      // Tab 1
+                1 -> AdminOrderListFragment.newInstance("packing")  // Tab 2
+                2 -> AdminOrderListFragment.newInstance("history")  // Tab 3
+                else -> AdminOrderListFragment.newInstance("new")
             }
         }
     }

@@ -21,11 +21,10 @@ class AdminOrderListFragment : Fragment(), OrderAdminAdapter.OrderActionListener
     private lateinit var orderAdapter: OrderAdminAdapter
     private val orderList = mutableListOf<Order>()
 
-    // Variabel untuk menyimpan tipe filter (default: active)
-    private var filterType: String = "active"
+    // Default filter
+    private var filterType: String = "new"
 
     companion object {
-        // Fungsi helper untuk membuat instance fragment dengan filter tertentu
         fun newInstance(filterType: String): AdminOrderListFragment {
             val fragment = AdminOrderListFragment()
             val args = Bundle()
@@ -37,9 +36,8 @@ class AdminOrderListFragment : Fragment(), OrderAdminAdapter.OrderActionListener
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Ambil argumen filter saat fragment dibuat
         arguments?.let {
-            filterType = it.getString("FILTER_TYPE", "active")
+            filterType = it.getString("FILTER_TYPE", "new") ?: "new"
         }
     }
 
@@ -67,27 +65,28 @@ class AdminOrderListFragment : Fragment(), OrderAdminAdapter.OrderActionListener
     }
 
     private fun fetchOrders() {
-        // Base Query
         var query: Query = db.collection("orders")
 
-        // Terapkan filter berdasarkan tab
-        if (filterType == "active") {
-            // Tab "Perlu Diproses": Hanya status 'Diproses'
-            query = query.whereEqualTo("status", "Diproses")
-        } else {
-            // Tab "Riwayat": Status selain 'Diproses' (Disetujui, Ditolak, Selesai)
-            query = query.whereIn("status", listOf("Disetujui", "Ditolak", "Selesai"))
+        // === LOGIKA 3 TAB ===
+        when (filterType) {
+            "new" -> {
+                // Tab 1: Hanya pesanan baru yang butuh persetujuan
+                query = query.whereEqualTo("status", "Diproses")
+            }
+            "packing" -> {
+                // Tab 2: Pesanan yang sudah disetujui dan sedang dikemas
+                query = query.whereEqualTo("status", "Disetujui")
+            }
+            "history" -> {
+                // Tab 3: Pesanan yang sudah selesai atau ditolak
+                query = query.whereIn("status", listOf("Selesai", "Ditolak"))
+            }
         }
 
-        // Urutkan berdasarkan tanggal terbaru
-        // PENTING: Jika query ini error di Logcat, klik link yang muncul untuk membuat Index di Firebase Console!
         query = query.orderBy("orderDate", Query.Direction.DESCENDING)
 
         query.addSnapshotListener { snapshots, error ->
             if (error != null) {
-                // Jangan tampilkan toast error permission jika sedang loading awal (opsional)
-                // Tapi print log agar developer tahu
-                error.printStackTrace()
                 return@addSnapshotListener
             }
 
@@ -101,21 +100,25 @@ class AdminOrderListFragment : Fragment(), OrderAdminAdapter.OrderActionListener
                     }
                 }
                 orderAdapter.notifyDataSetChanged()
-
-                // Tampilkan pesan kosong jika tidak ada data
-                if (orderList.isEmpty()) {
-                    // Anda bisa menambahkan TextView "Data Kosong" di XML dan mengaturnya di sini
-                }
             }
         }
     }
 
+    // === AKSI ===
+
     override fun onApproveClick(order: Order) {
+        // "Diproses" -> "Disetujui" (Akan pindah dari Tab 1 ke Tab 2)
         updateOrderStatus(order.id, "Disetujui")
     }
 
     override fun onRejectClick(order: Order) {
+        // "Diproses" -> "Ditolak" (Akan pindah dari Tab 1 ke Tab 3)
         updateOrderStatus(order.id, "Ditolak")
+    }
+
+    override fun onCompleteClick(order: Order) {
+        // "Disetujui" -> "Selesai" (Akan pindah dari Tab 2 ke Tab 3)
+        updateOrderStatus(order.id, "Selesai")
     }
 
     override fun onItemClick(order: Order) {
@@ -131,10 +134,16 @@ class AdminOrderListFragment : Fragment(), OrderAdminAdapter.OrderActionListener
         db.collection("orders").document(orderId)
             .update(updateMap)
             .addOnSuccessListener {
-                Toast.makeText(requireContext(), "Status diperbarui: $newStatus", Toast.LENGTH_SHORT).show()
+                val message = when(newStatus) {
+                    "Disetujui" -> "Pesanan disetujui. Pindah ke tab 'Sedang Dikemas'"
+                    "Selesai" -> "Pesanan selesai. Pindah ke tab 'Riwayat'"
+                    "Ditolak" -> "Pesanan ditolak. Pindah ke tab 'Riwayat'"
+                    else -> "Status diperbarui"
+                }
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
             }
             .addOnFailureListener { e ->
-                Toast.makeText(requireContext(), "Gagal update: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "Gagal: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 

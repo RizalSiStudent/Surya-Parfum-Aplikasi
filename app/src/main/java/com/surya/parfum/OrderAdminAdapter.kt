@@ -13,93 +13,102 @@ import java.util.*
 
 class OrderAdminAdapter(
     private val orderList: List<Order>,
-    // 1. Tambahkan listener sebagai parameter konstruktor
     private val listener: OrderActionListener
-) : RecyclerView.Adapter<OrderAdminAdapter.ViewHolder>() {
+) : RecyclerView.Adapter<OrderAdminAdapter.OrderViewHolder>() {
 
-    // Interface Callback untuk mengirim aksi ke Fragment
+    // Tambahkan fungsi onCompleteClick di Interface
     interface OrderActionListener {
         fun onApproveClick(order: Order)
         fun onRejectClick(order: Order)
-        // Tambahkan fungsi untuk menangani klik item (navigasi)
+        fun onCompleteClick(order: Order) // <-- Fungsi Baru
         fun onItemClick(order: Order)
     }
 
-    inner class ViewHolder(val binding: ItemOrderAdminBinding) : RecyclerView.ViewHolder(binding.root)
+    inner class OrderViewHolder(val binding: ItemOrderAdminBinding) :
+        RecyclerView.ViewHolder(binding.root)
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemOrderAdminBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return ViewHolder(binding)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): OrderViewHolder {
+        val binding = ItemOrderAdminBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
+        return OrderViewHolder(binding)
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+    override fun onBindViewHolder(holder: OrderViewHolder, position: Int) {
         val order = orderList[position]
         val context = holder.itemView.context
 
         holder.binding.apply {
-            tvCustomerName.text = order.customerName
+            tvCustomerName.text = order.customerName ?: "Pengguna Anonim"
             tvOrderTotal.text = formatCurrency(order.totalAmount)
+            tvFulfillment.text = "Metode: ${order.fulfillmentMethod ?: "Tidak diketahui"}"
             tvOrderStatus.text = order.status
-            tvFulfillment.text = "Metode: ${order.fulfillmentMethod}"
 
-            // Atur UI Status (Warna latar belakang)
-            updateStatusUI(tvOrderStatus, order.status, context)
-
-            // Format tanggal agar mudah dibaca
             order.orderDate?.toDate()?.let { date ->
                 val format = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale("in", "ID"))
                 tvOrderDate.text = format.format(date)
             }
 
-            // Logika Visibilitas Tombol Aksi
-            // Tombol hanya ditampilkan jika status masih "Diproses"
-            if (order.status == "Diproses") {
-                llActionButtons.visibility = View.VISIBLE
-                btnApprove.visibility = View.VISIBLE
-                btnReject.visibility = View.VISIBLE
-            } else {
-                llActionButtons.visibility = View.GONE
+            updateStatusUI(tvOrderStatus, order.status, context)
+
+            // === LOGIKA TOMBOL DINAMIS ===
+            when (order.status) {
+                "Diproses" -> {
+                    // Pesanan Baru: Tampilkan Setujui & Tolak
+                    llActionButtons.visibility = View.VISIBLE
+                    btnApprove.visibility = View.VISIBLE
+                    btnApprove.text = "Setujui"
+                    btnReject.visibility = View.VISIBLE
+                }
+                "Disetujui" -> {
+                    // Pesanan Sedang Dikemas: Tampilkan Tombol "Selesaikan"
+                    llActionButtons.visibility = View.VISIBLE
+                    btnApprove.visibility = View.VISIBLE
+                    btnApprove.text = "Selesaikan" // Ganti teks tombol
+                    btnReject.visibility = View.GONE // Sembunyikan tombol tolak
+                }
+                else -> {
+                    // Pesanan Selesai/Ditolak: Sembunyikan semua tombol
+                    llActionButtons.visibility = View.GONE
+                }
             }
 
-            // 2. Menangani Klik Tombol Aksi
+            // Listener Klik Tombol Approve (berfungsi ganda: Setujui atau Selesaikan)
             btnApprove.setOnClickListener {
-                listener.onApproveClick(order)
+                if (order.status == "Diproses") {
+                    listener.onApproveClick(order)
+                } else if (order.status == "Disetujui") {
+                    listener.onCompleteClick(order)
+                }
             }
 
             btnReject.setOnClickListener {
                 listener.onRejectClick(order)
             }
-        }
 
-        // 3. Menangani Klik Item (untuk Navigasi ke Detail)
-        holder.itemView.setOnClickListener {
-            listener.onItemClick(order)
+            root.setOnClickListener {
+                listener.onItemClick(order)
+            }
         }
     }
 
-
     override fun getItemCount(): Int = orderList.size
 
-    // --- Utility Functions ---
-
-    /** Memformat angka menjadi format mata uang Rupiah. */
     private fun formatCurrency(amount: Long): String {
         val format = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
         format.maximumFractionDigits = 0
         return format.format(amount)
     }
 
-    /** Fungsi untuk mengubah warna latar belakang status. */
     private fun updateStatusUI(view: View, status: String, context: Context) {
-        // NOTE: Anda perlu mendefinisikan color resource di colors.xml atau
-        // menggunakan warna bawaan Android seperti di bawah.
         val colorResId = when (status) {
             "Disetujui" -> android.R.color.holo_green_dark
             "Ditolak" -> android.R.color.holo_red_dark
             "Selesai" -> android.R.color.holo_blue_dark
-            else -> android.R.color.holo_orange_dark // Diproses/Default
+            else -> android.R.color.holo_orange_dark
         }
-        // Asumsi Anda menggunakan MaterialCardView, kita menggunakan backgroundTintList
         view.backgroundTintList = ContextCompat.getColorStateList(context, colorResId)
     }
 }

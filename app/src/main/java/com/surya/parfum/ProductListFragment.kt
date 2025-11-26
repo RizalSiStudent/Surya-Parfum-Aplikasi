@@ -2,16 +2,16 @@ package com.surya.parfum
 
 import android.os.Bundle
 import android.util.Log
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.appcompat.widget.SearchView
+import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.GridLayoutManager // Saran: Gunakan Grid untuk tampilan User
 import com.google.firebase.firestore.FirebaseFirestore
 import com.surya.parfum.databinding.FragmentProductListBinding
-import kotlin.apply
-import kotlin.jvm.java
+import java.util.*
 
 class ProductListFragment : Fragment() {
 
@@ -21,7 +21,9 @@ class ProductListFragment : Fragment() {
 
     private lateinit var db: FirebaseFirestore
     private lateinit var productAdapter: ProductUserAdapter
-    private val productList = mutableListOf<Product>()
+
+    // List Master (Menyimpan semua data asli)
+    private val allProducts = mutableListOf<Product>()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -36,52 +38,96 @@ class ProductListFragment : Fragment() {
 
         db = FirebaseFirestore.getInstance()
         setupRecyclerView()
+        setupSearch() // Inisialisasi Search
         fetchProducts()
     }
 
     private fun setupRecyclerView() {
-        // Ganti ProductUserAdapter dengan adapter yang Anda buat untuk user
-        productAdapter = ProductUserAdapter(productList)
+        // Inisialisasi dengan list kosong
+        productAdapter = ProductUserAdapter(mutableListOf())
+
         binding.rvUserProducts.apply {
-            layoutManager = LinearLayoutManager(context)
+            // Saran: Gunakan GridLayoutManager (2 kolom) agar lebih menarik untuk user
+            layoutManager = GridLayoutManager(context, 2)
+            // Jika ingin list biasa: layoutManager = LinearLayoutManager(context)
             adapter = productAdapter
         }
     }
 
+    // === LOGIKA PENCARIAN ===
+    private fun setupSearch() {
+        binding.searchViewUser.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                filterProducts(newText)
+                return true
+            }
+        })
+    }
+
+    private fun filterProducts(query: String?) {
+        if (query != null) {
+            val filteredList = ArrayList<Product>()
+            val searchQuery = query.lowercase(Locale.getDefault())
+
+            for (product in allProducts) {
+                if (product.name.lowercase(Locale.getDefault()).contains(searchQuery)) {
+                    filteredList.add(product)
+                }
+            }
+
+            // Tampilkan/Sembunyikan pesan kosong
+            if (filteredList.isEmpty()) {
+                binding.tvEmptySearch.visibility = View.VISIBLE
+                binding.rvUserProducts.visibility = View.GONE
+            } else {
+                binding.tvEmptySearch.visibility = View.GONE
+                binding.rvUserProducts.visibility = View.VISIBLE
+                productAdapter.updateList(filteredList)
+            }
+        } else {
+            // Jika query kosong, tampilkan semua
+            binding.tvEmptySearch.visibility = View.GONE
+            binding.rvUserProducts.visibility = View.VISIBLE
+            productAdapter.updateList(allProducts)
+        }
+    }
+
     private fun fetchProducts() {
-        Log.d(TAG, "Mulai mengambil data dari Firestore...") // Log 1: Memastikan fungsi dipanggil
+        Log.d(TAG, "Mulai mengambil data dari Firestore...")
         binding.progressBar.visibility = View.VISIBLE
         binding.rvUserProducts.visibility = View.GONE
 
         db.collection("products")
             .get()
             .addOnSuccessListener { result ->
-                // Log 2: Memeriksa apakah pengambilan data berhasil
                 Log.d(TAG, "Sukses! Ditemukan ${result.size()} dokumen.")
-
                 binding.progressBar.visibility = View.GONE
+
                 if (!result.isEmpty) {
-                    productList.clear()
+                    allProducts.clear() // Reset Master Data
+
                     for (document in result) {
                         try {
                             val product = document.toObject(Product::class.java)
                             product.id = document.id
-                            productList.add(product)
-                            // Log 3: Memastikan setiap produk berhasil ditambahkan ke list
-                            Log.d(TAG, "Menambahkan produk: ${product.name}")
+                            allProducts.add(product)
                         } catch (e: Exception) {
-                            // Log 4: Jika ada error saat mengubah data (misal tipe data tidak cocok)
                             Log.e(TAG, "Error converting document ${document.id}", e)
                         }
                     }
-                    productAdapter.notifyDataSetChanged()
+
+                    // Tampilkan semua data awal
+                    productAdapter.updateList(allProducts)
                     binding.rvUserProducts.visibility = View.VISIBLE
                 } else {
                     Toast.makeText(context, "Belum ada produk.", Toast.LENGTH_SHORT).show()
                 }
             }
             .addOnFailureListener { exception ->
-                // Log 5: Jika ada error besar (misal masalah koneksi atau izin)
                 Log.e(TAG, "Gagal mengambil data!", exception)
                 binding.progressBar.visibility = View.GONE
                 Toast.makeText(context, "Gagal memuat data: ${exception.message}", Toast.LENGTH_LONG).show()
